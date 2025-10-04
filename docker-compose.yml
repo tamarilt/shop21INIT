@@ -1,0 +1,146 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: shopApi_db
+    environment:
+      POSTGRES_DB: shopAPI
+      POSTGRES_USER: tamarilt
+      POSTGRES_PASSWORD: shopAPI
+    ports:
+      - "10009:5432"
+    volumes:
+      - ../shop21API/src/sql:/docker-entrypoint-initdb.d
+    networks:
+      - shop-network
+
+  postgres_auth:
+    image: postgres:15
+    container_name: shopAuth_db
+    environment:
+      POSTGRES_DB: shopAUTH
+      POSTGRES_USER: tamarilt
+      POSTGRES_PASSWORD: shopAUTH
+    ports:
+      - "10010:5432"
+    volumes:
+      - ../shop21AUTH/src/sql:/docker-entrypoint-initdb.d
+    networks:
+      - shop-network
+
+  shop21auth:
+    build:
+      context: ../shop21AUTH
+      dockerfile: Dockerfile
+    container_name: shop21auth
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_auth:5432/shopAUTH
+      - SPRING_DATASOURCE_USERNAME=tamarilt
+      - SPRING_DATASOURCE_PASSWORD=shopAUTH
+      - GRPC_SERVER_PORT=9090
+    ports:
+      - "8081:8080"
+      - "9090:9090"
+    depends_on:
+      - postgres_auth
+    networks:
+      - shop-network
+
+  shop21api:
+    build:
+      context: ../shop21API
+      dockerfile: Dockerfile
+    container_name: shop21api
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/shopAPI
+      - SPRING_DATASOURCE_USERNAME=tamarilt
+      - SPRING_DATASOURCE_PASSWORD=shopAPI
+      - GRPC_CLIENT_AUTH_SERVICE_ADDRESS=static://shop21auth:9090
+    ports:
+      - "10000:8080"
+    depends_on:
+      - postgres
+      - shop21auth
+    networks:
+      - shop-network
+
+  shop21api_read1:
+    build:
+      context: ../shop21API
+      dockerfile: Dockerfile
+    container_name: shop21api_read1
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/shopAPI
+      - SPRING_DATASOURCE_USERNAME=tamarilt
+      - SPRING_DATASOURCE_PASSWORD=shopAPI
+      - GRPC_CLIENT_AUTH_SERVICE_ADDRESS=static://shop21auth:9090
+    ports:
+      - "10001:8080"
+    depends_on:
+      - postgres
+      - shop21auth
+    networks:
+      - shop-network
+
+  shop21api_read2:
+    build:
+      context: ../shop21API
+      dockerfile: Dockerfile
+    container_name: shop21api_read2
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/shopAPI
+      - SPRING_DATASOURCE_USERNAME=tamarilt
+      - SPRING_DATASOURCE_PASSWORD=shopAPI
+      - GRPC_CLIENT_AUTH_SERVICE_ADDRESS=static://shop21auth:9090
+    ports:
+      - "10002:8080"
+    depends_on:
+      - postgres
+      - shop21auth
+    networks:
+      - shop-network
+
+  shop21ui:
+    build:
+      context: ../shop21UI
+      dockerfile: Dockerfile
+    container_name: shop21ui
+    ports:
+      - "10011:10011"
+    networks:
+      - shop-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: shopApi_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "10008:80"
+    depends_on:
+      - postgres
+      - postgres_auth
+    networks:
+      - shop-network
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: shopApi_nginx
+    ports:
+      - "10006:80"
+      - "10007:443"
+    volumes:
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - shop21api
+      - shop21api_read1
+      - shop21api_read2
+      - pgadmin
+    networks:
+      - shop-network
+
+networks:
+  shop-network:
+    driver: bridge
